@@ -1,0 +1,71 @@
+import cv2
+import numpy as np
+from skimage.feature import local_binary_pattern
+
+def extract_features(image_path):
+    # Load image
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    
+    # Resize for consistency
+    img = cv2.resize(img, (128, 128))
+    
+    # Apply Local Binary Pattern (LBP)
+    radius = 1
+    n_points = 8 * radius
+    lbp = local_binary_pattern(img, n_points, radius, method='uniform')
+    
+    # Histogram of LBP
+    hist, _ = np.histogram(lbp.ravel(),
+                           bins=np.arange(0, n_points + 3),
+                           range=(0, n_points + 2))
+    
+    # Normalize histogram
+    hist = hist.astype("float")
+    hist /= (hist.sum() + 1e-6)
+    
+    return hist
+import os
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import joblib
+
+data = []
+labels = []
+
+dataset_path = "dataset/"  # Folder with subfolders: A, B, AB, O
+
+for label in os.listdir(dataset_path):
+    folder = os.path.join(dataset_path, label)
+    
+    for file in os.listdir(folder):
+        path = os.path.join(folder, file)
+        features = extract_features(path)
+        
+        data.append(features)
+        labels.append(label)
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
+
+# Train model
+model = RandomForestClassifier(n_estimators=100)
+model.fit(X_train, y_train)
+
+# Save model
+joblib.dump(model, "blood_group_model.pkl")
+
+print("Model trained successfully!")
+import joblib
+
+model = joblib.load("blood_group_model.pkl")
+
+def predict_blood_group(image_path):
+    features = extract_features(image_path)
+    features = features.reshape(1, -1)
+    
+    prediction = model.predict(features)
+    return prediction[0]
+
+# Test
+result = predict_blood_group("test_fingerprint.jpg")
+print("Predicted Blood Group:", result)
